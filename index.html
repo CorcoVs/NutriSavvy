@@ -16,40 +16,50 @@
     <title>NutriSavvy</title>
   </head>
   <body>
-    <!-- <h1>Food Scanner</h1> -->
     <div id="scanner">
       <video id="video" width="400" height="300"></video>
       <canvas id="canvas" width="400" height="300"></canvas>
     </div>
     <br />
     <div class="container">
-      <button id="startBtn">Scan</button>
+      <button id="startBtn" type="button">Scan</button>
+      <label class="scan-mode">
+        <input type="checkbox" id="demoMode" />
+        <span>Demo barcode</span>
+      </label>
       <div class="feedback">
-        <span class="material-symbols-outlined"> barcode </span>
+        <div class="feedback__iconRow" aria-hidden="true">
+          <span class="material-symbols-outlined">barcode</span>
+        </div>
+        <p
+          class="feedback__barcode feedback__barcode--empty"
+          id="barcodeDisplay"
+        >
+          No barcode yet
+        </p>
       </div>
       <div class="statusContainer">
-        <div class="status hidden">No product found</div>
+        <div class="status hidden" role="status"></div>
       </div>
     </div>
     <ul class="result hidden">
       <li class="first--row">
-        <img class="product--image hidden" src="" alt="image" />
+        <img class="product--image hidden" src="" alt="" />
         <div class="product--name"></div>
       </li>
-      <li class="nutriscore hidden">
+      <li class="nutriscore hidden result-block">
         <img class="nova" src="" alt="" />
       </li>
-      <div class="wrapper">
+      <div class="wrapper result-block">
         <img class="nutrigrade hidden" src="" alt="" />
       </div>
-      <div class="wrapper">
+      <div class="wrapper result-block">
         <li class="additives hidden">Additives list</li>
       </div>
-      <div class="wrapper">
+      <div class="wrapper result-block">
         <li class="ingredients hidden">Ingredients list</li>
       </div>
     </ul>
-    <!-- QuaggaJS library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <script src="script.js"></script>
   </body>

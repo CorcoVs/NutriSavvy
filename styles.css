@@ -62,7 +62,7 @@ canvas {
 
 .container {
   max-width: 100%;
-  line-height: 3em;
+  line-height: 1.8;
   text-align: center;
   margin: auto 0 auto 0;
 }
@@ -71,7 +71,7 @@ canvas {
   margin-left: auto;
   margin-right: auto;
   max-width: 75%;
-  padding: 0.6rem;
+  padding: 0.6rem 1rem;
   display: block;
   border: none;
   border-radius: 8px;
@@ -79,6 +79,7 @@ canvas {
   transition: background-color 0.3s ease;
   cursor: pointer;
   background-color: #f5f5f5;
+  font-size: 1rem;
 }
 
 #startBtn:hover {
@@ -86,22 +87,74 @@ canvas {
   color: #f5f5f5;
 }
 
+.scan-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 0.75rem auto 0 auto;
+  font-size: 0.95rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.scan-mode input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: #4caf50;
+}
+
 .feedback {
-  margin: 1.2rem auto;
+  margin: 1rem auto 0.5rem auto;
+  max-width: 90%;
+}
+
+.feedback__iconRow {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.35rem;
+}
+
+.feedback__barcode {
+  margin: 0 auto;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(51, 51, 51, 0.25);
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feedback__barcode--empty {
+  color: #555;
+  font-style: italic;
+  letter-spacing: normal;
 }
 
 .first--row {
   display: flex;
   justify-content: space-around;
   align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .result {
-  padding: 1%;
-  margin: 2rem auto 0 auto;
+  padding: 1rem 1.25rem;
+  margin: 1.25rem auto 0 auto;
+  max-width: 640px;
   background-color: rgb(234, 240, 229);
   border: 1px solid gray;
-  border-radius: 6px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
 }
 
 .result .div {
@@ -128,32 +181,48 @@ canvas {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.nutriscore,
-.nutrigrade,
-.additieves,
-.ingredients {
-  display: block;
+.result-block {
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.5s ease;
+  opacity: 0;
+  transition: max-height 0.45s ease, opacity 0.35s ease;
   text-align: center;
-  margin-top: 0.5rem;
-  font-size: 1.2rem;
+}
+
+.result-block.is-revealed {
+  max-height: 320px;
+  opacity: 1;
+}
+
+.nutriscore,
+.nutrigrade,
+.additives,
+.ingredients {
+  text-align: center;
+  margin-top: 0.35rem;
+  font-size: 1.1rem;
+  line-height: 1.45;
 }
 
 .wrapper {
   display: flex;
   justify-content: center;
+  width: 100%;
 }
 
-ul {
-  line-height: 5em;
+ul.result {
+  line-height: 1.5;
 }
 
 .flashing-border {
   border: 5px solid green;
-  animation: flashing 1s infinite alternate;
-  -webkit-animation: flashing 1s infinite alternate;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .flashing-border {
+    animation: flashing 1s infinite alternate;
+    -webkit-animation: flashing 1s infinite alternate;
+  }
 }
 
 @keyframes flashing {
@@ -173,14 +242,36 @@ ul {
   border: 1px solid #333;
   border-radius: 9px;
   margin: 0 auto;
-  padding: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 90%;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.status--scanning {
+  border-color: #1976d2;
+  background: rgba(227, 242, 253, 0.9);
+}
+
+.status--success {
+  border-color: #2e7d32;
+  background: rgba(232, 245, 233, 0.95);
+}
+
+.status--error {
+  border-color: #c62828;
+  background: rgba(255, 235, 238, 0.95);
 }
 
 .statusContainer {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 8vh; /* Adjust the height as needed */
+  min-height: 3.5rem;
+  margin-top: 0.5rem;
 }
 
 .nutriscore {
@@ -192,4 +283,12 @@ ul {
 
 .nutriscore img {
   width: 50px;
+  height: auto;
+}
+
+.nutrigrade {
+  max-height: 100px;
+  width: auto;
+  margin-left: auto;
+  margin-right: auto;
 }
