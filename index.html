@@ -16,50 +16,172 @@
     <title>NutriSavvy</title>
   </head>
   <body>
-    <div id="scanner">
-      <video id="video" width="400" height="300"></video>
-      <canvas id="canvas" width="400" height="300"></canvas>
-    </div>
-    <br />
-    <div class="container">
-      <button id="startBtn" type="button">Scan</button>
-      <label class="scan-mode">
-        <input type="checkbox" id="demoMode" />
-        <span>Demo barcode</span>
-      </label>
-      <div class="feedback">
-        <div class="feedback__iconRow" aria-hidden="true">
-          <span class="material-symbols-outlined">barcode</span>
+    <div class="app-shell">
+      <header class="app-header">
+        <h1 class="app-title">NutriSavvy</h1>
+        <div class="lang-toggle" role="group" aria-label="Language">
+          <button type="button" class="lang-toggle__btn" data-lang="en">
+            EN
+          </button>
+          <button type="button" class="lang-toggle__btn" data-lang="ro">
+            RO
+          </button>
         </div>
-        <p
-          class="feedback__barcode feedback__barcode--empty"
-          id="barcodeDisplay"
+      </header>
+
+      <div class="scanner-shell">
+        <div id="scanner">
+          <video id="video" playsinline></video>
+          <canvas id="canvas" width="400" height="300"></canvas>
+        </div>
+      </div>
+
+      <div class="container">
+        <button id="startBtn" type="button" class="btn btn--primary">
+          Scan
+        </button>
+        <button
+          id="manualOpenBtn"
+          type="button"
+          class="btn btn--secondary"
         >
-          No barcode yet
-        </p>
+          Enter code manually
+        </button>
+
+        <label class="scan-mode">
+          <input type="checkbox" id="demoMode" />
+          <span data-i18n="demoBarcode">Demo barcode</span>
+        </label>
+
+        <div class="prefs-row">
+          <label class="prefs-row__label" for="ingredientsLangPref">
+            <span data-i18n="ingredientsPrefLabel">Ingredients language</span>
+          </label>
+          <select id="ingredientsLangPref" class="prefs-row__select">
+            <option value="auto" data-i18n="prefAuto">Auto</option>
+            <option value="ro">RO</option>
+            <option value="en">EN</option>
+          </select>
+        </div>
+
+        <div class="feedback">
+          <div class="feedback__card">
+            <span
+              class="material-symbols-outlined feedback__icon"
+              aria-hidden="true"
+              >barcode</span
+            >
+            <p
+              class="feedback__barcode feedback__barcode--empty"
+              id="barcodeDisplay"
+              data-i18n-empty="noBarcodeYet"
+            >
+              No barcode yet
+            </p>
+          </div>
+        </div>
+
+        <div class="statusContainer">
+          <div class="status hidden" role="status"></div>
+        </div>
       </div>
-      <div class="statusContainer">
-        <div class="status hidden" role="status"></div>
+
+      <dialog id="manualDialog" class="manual-dialog">
+        <form method="dialog" class="manual-dialog__form" id="manualForm">
+          <label class="manual-dialog__label" for="manualBarcodeInput">
+            <span data-i18n="manualBarcodeLabel">Barcode (digits)</span>
+          </label>
+          <input
+            id="manualBarcodeInput"
+            class="manual-dialog__input"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            autocomplete="off"
+            maxlength="14"
+            placeholder="4006381333931"
+          />
+          <div class="manual-dialog__actions">
+            <button type="button" class="btn btn--secondary" id="manualCancel">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn--primary" id="manualSubmit">
+              Look up
+            </button>
+          </div>
+        </form>
+      </dialog>
+
+      <div class="result hidden" id="resultCard">
+        <div class="first--row">
+          <img class="product--image hidden" src="" alt="" />
+          <div class="product--name"></div>
+        </div>
+
+        <div class="score-section result-block" id="novaSection">
+          <h2 class="score-section__title" data-i18n="novaTitle">NOVA</h2>
+          <p class="score-section__hint" data-i18n="novaHint">
+            Food processing scale (1–4)
+          </p>
+          <div class="nutriscore-row hidden" id="novaRow">
+            <img class="nova" src="" alt="" />
+          </div>
+        </div>
+
+        <div class="score-section result-block" id="nutriSection">
+          <h2 class="score-section__title" data-i18n="nutriTitle">
+            Nutri-Score
+          </h2>
+          <p class="score-section__hint" data-i18n="nutriHint">
+            Relative nutrition for this category
+          </p>
+          <div class="nutrigrade-wrap">
+            <img class="nutrigrade hidden" src="" alt="" />
+          </div>
+        </div>
+
+        <div class="result-block">
+          <div class="additives additives-line hidden"></div>
+        </div>
+
+        <div class="result-block ingredients-block">
+          <h2 class="ingredients-heading" data-i18n="ingredientsHeading">
+            Ingredients
+          </h2>
+          <p class="ingredients-source hidden" id="ingredientsSource"></p>
+          <div class="ingredients ingredients--scroll hidden"></div>
+        </div>
       </div>
+
+      <details class="legend">
+        <summary class="legend__summary" data-i18n="legendSummary">
+          What do NOVA and Nutri-Score mean?
+        </summary>
+        <div class="legend__body">
+          <section class="legend__section">
+            <h3 data-i18n="legendNovaHeading">NOVA groups</h3>
+            <ul class="legend__list">
+              <li data-i18n="legendNova1">1 — Unprocessed or minimally processed</li>
+              <li data-i18n="legendNova2">
+                2 — Processed culinary ingredients (oils, sugar, salt)
+              </li>
+              <li data-i18n="legendNova3">3 — Processed foods</li>
+              <li data-i18n="legendNova4">
+                4 — Ultra-processed foods
+              </li>
+            </ul>
+          </section>
+          <section class="legend__section">
+            <h3 data-i18n="legendNutriHeading">Nutri-Score</h3>
+            <p class="legend__p" data-i18n="legendNutriP">
+              Letter grades compare similar products. They are not a full diet
+              verdict — check portions and whole diet too.
+            </p>
+          </section>
+        </div>
+      </details>
     </div>
-    <ul class="result hidden">
-      <li class="first--row">
-        <img class="product--image hidden" src="" alt="" />
-        <div class="product--name"></div>
-      </li>
-      <li class="nutriscore hidden result-block">
-        <img class="nova" src="" alt="" />
-      </li>
-      <div class="wrapper result-block">
-        <img class="nutrigrade hidden" src="" alt="" />
-      </div>
-      <div class="wrapper result-block">
-        <li class="additives hidden">Additives list</li>
-      </div>
-      <div class="wrapper result-block">
-        <li class="ingredients hidden">Ingredients list</li>
-      </div>
-    </ul>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <script src="script.js"></script>
   </body>
