@@ -1,0 +1,19 @@
+{
+  "name": "NutriSavvy",
+  "short_name": "NutriSavvy",
+  "description": "Scan food barcodes to see NOVA and Nutri-Score ratings",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#e8f5e9",
+  "theme_color": "#2e7d32",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "assets/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": []
+}

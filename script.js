@@ -77,7 +77,7 @@ const STRINGS = {
     fetchError: "Nu s-au putut încărca datele — verifică conexiunea",
     scanning: "Scanare…",
     scanHint:
-      "Ține codul de bare în cadru, paralel cu ecranul, la lumină stabilă.",
+      "Ține codul de bare în cadru la lumina bună, paralel cu ecranul.",
     scannerFailed: "Scannerul nu a pornit",
     cameraError: "Cameră indisponibilă sau refuzată",
     manualBarcodeLabel: "Cod de bare (cifre)",

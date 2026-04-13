@@ -4,30 +4,65 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <meta name="theme-color" content="#2e7d32" id="meta-theme-color" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="manifest.json" />
     <link rel="stylesheet" href="styles.css" />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css?family=Roboto"
-    />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto" />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
     />
     <title>NutriSavvy</title>
+    <!-- Prevent dark-mode flash before CSS loads -->
+    <script>
+      (function () {
+        var t = localStorage.getItem("nutrisavvy_theme");
+        var sys = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (t === "dark" || (t === null && sys)) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
   </head>
   <body>
+    <!-- Pull-to-rescan indicator (fixed, outside app-shell) -->
+    <div id="pullIndicator" class="pull-indicator" aria-hidden="true">
+      <span class="material-symbols-outlined pull-indicator__icon">keyboard_arrow_down</span>
+      <span data-i18n="pullToRescan">Pull to rescan</span>
+    </div>
+
     <div class="app-shell">
       <header class="app-header">
         <h1 class="app-title">NutriSavvy</h1>
-        <div class="lang-toggle" role="group" aria-label="Language">
-          <button type="button" class="lang-toggle__btn" data-lang="en">
-            EN
-          </button>
-          <button type="button" class="lang-toggle__btn" data-lang="ro">
-            RO
+        <div class="header-controls">
+          <div class="lang-toggle" role="group" aria-label="Language">
+            <button type="button" class="lang-toggle__btn" data-lang="en">EN</button>
+            <button type="button" class="lang-toggle__btn" data-lang="ro">RO</button>
+          </div>
+          <button type="button" class="dark-toggle" id="darkToggle" aria-label="Toggle dark mode">
+            <span class="material-symbols-outlined" id="darkToggleIcon">dark_mode</span>
           </button>
         </div>
       </header>
+
+      <!-- Empty / onboarding state -->
+      <div id="emptyState" class="empty-state">
+        <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg"
+          class="empty-state__svg" aria-hidden="true">
+          <rect x="35" y="12" width="50" height="90" rx="8" stroke="currentColor" stroke-width="3"/>
+          <rect x="41" y="22" width="38" height="62" rx="3" fill="currentColor" fill-opacity="0.08"/>
+          <line x1="47" y1="37" x2="47" y2="70" stroke="currentColor" stroke-width="2"/>
+          <line x1="52" y1="37" x2="52" y2="70" stroke="currentColor" stroke-width="3.5"/>
+          <line x1="57" y1="37" x2="57" y2="70" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="61" y1="37" x2="61" y2="70" stroke="currentColor" stroke-width="3"/>
+          <line x1="65" y1="37" x2="65" y2="70" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="69" y1="37" x2="69" y2="70" stroke="currentColor" stroke-width="3.5"/>
+          <line x1="74" y1="37" x2="74" y2="70" stroke="currentColor" stroke-width="2"/>
+          <circle cx="60" cy="95" r="4" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        <p class="empty-state__text" data-i18n="emptyStateText">Scan a product to get started</p>
+      </div>
 
       <div class="scanner-shell">
         <div id="scanner">
@@ -37,14 +72,8 @@
       </div>
 
       <div class="container">
-        <button id="startBtn" type="button" class="btn btn--primary">
-          Scan
-        </button>
-        <button
-          id="manualOpenBtn"
-          type="button"
-          class="btn btn--secondary"
-        >
+        <button id="startBtn" type="button" class="btn btn--primary">Scan</button>
+        <button id="manualOpenBtn" type="button" class="btn btn--secondary">
           Enter code manually
         </button>
 
@@ -66,16 +95,9 @@
 
         <div class="feedback">
           <div class="feedback__card">
-            <span
-              class="material-symbols-outlined feedback__icon"
-              aria-hidden="true"
-              >barcode</span
-            >
-            <p
-              class="feedback__barcode feedback__barcode--empty"
-              id="barcodeDisplay"
-              data-i18n-empty="noBarcodeYet"
-            >
+            <span class="material-symbols-outlined feedback__icon" aria-hidden="true">barcode</span>
+            <p class="feedback__barcode feedback__barcode--empty"
+              id="barcodeDisplay" data-i18n-empty="noBarcodeYet">
               No barcode yet
             </p>
           </div>
@@ -102,15 +124,24 @@
             placeholder="4006381333931"
           />
           <div class="manual-dialog__actions">
-            <button type="button" class="btn btn--secondary" id="manualCancel">
-              Cancel
-            </button>
-            <button type="submit" class="btn btn--primary" id="manualSubmit">
-              Look up
-            </button>
+            <button type="button" class="btn btn--secondary" id="manualCancel">Cancel</button>
+            <button type="submit" class="btn btn--primary" id="manualSubmit">Look up</button>
           </div>
         </form>
       </dialog>
+
+      <!-- Loading skeleton (shown during fetch) -->
+      <div id="skeletonCard" class="result skeleton-card hidden">
+        <div class="skeleton-first-row">
+          <div class="skeleton-circle skeleton-block"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton-line skeleton-block"></div>
+            <div class="skeleton-line skeleton-block skeleton-line--short"></div>
+          </div>
+        </div>
+        <div class="skeleton-line skeleton-block skeleton-tall"></div>
+        <div class="skeleton-line skeleton-block skeleton-tall"></div>
+      </div>
 
       <div class="result hidden" id="resultCard">
         <div class="first--row">
@@ -124,19 +155,17 @@
             Food processing scale (1–4)
           </p>
           <div class="nutriscore-row hidden" id="novaRow">
-            <img class="nova" src="" alt="" />
+            <div class="nova-badge" id="novaBadge" role="img"></div>
           </div>
         </div>
 
         <div class="score-section result-block" id="nutriSection">
-          <h2 class="score-section__title" data-i18n="nutriTitle">
-            Nutri-Score
-          </h2>
+          <h2 class="score-section__title" data-i18n="nutriTitle">Nutri-Score</h2>
           <p class="score-section__hint" data-i18n="nutriHint">
             Relative nutrition for this category
           </p>
           <div class="nutrigrade-wrap">
-            <img class="nutrigrade hidden" src="" alt="" />
+            <div class="nutri-badge hidden" id="nutriBadge" role="img"></div>
           </div>
         </div>
 
@@ -144,14 +173,26 @@
           <div class="additives additives-line hidden"></div>
         </div>
 
-        <div class="result-block ingredients-block">
-          <h2 class="ingredients-heading" data-i18n="ingredientsHeading">
-            Ingredients
+        <div class="result-block" id="macrosBlock">
+          <h2 class="score-section__title macros-heading" data-i18n="macrosHeading">
+            Nutrition per 100g
           </h2>
+          <table class="macros-table" id="macrosTable"></table>
+        </div>
+
+        <div class="result-block ingredients-block">
+          <h2 class="ingredients-heading" data-i18n="ingredientsHeading">Ingredients</h2>
           <p class="ingredients-source hidden" id="ingredientsSource"></p>
           <div class="ingredients ingredients--scroll hidden"></div>
         </div>
       </div>
+
+      <!-- Scan history -->
+      <section id="historySection" class="history-section">
+        <h2 class="history-heading" data-i18n="historyHeading">Recent scans</h2>
+        <p id="historyEmpty" class="history-empty" data-i18n="historyEmpty">No scan history yet</p>
+        <ul class="history-list" id="historyList"></ul>
+      </section>
 
       <details class="legend">
         <summary class="legend__summary" data-i18n="legendSummary">
@@ -166,9 +207,7 @@
                 2 — Processed culinary ingredients (oils, sugar, salt)
               </li>
               <li data-i18n="legendNova3">3 — Processed foods</li>
-              <li data-i18n="legendNova4">
-                4 — Ultra-processed foods
-              </li>
+              <li data-i18n="legendNova4">4 — Ultra-processed foods</li>
             </ul>
           </section>
           <section class="legend__section">
