@@ -4,11 +4,13 @@ const scanner = document.getElementById("scanner");
 const statusModal = document.querySelector(".status");
 const resultModal = document.getElementById("resultCard");
 const novaRow = document.getElementById("novaRow");
-const nutrigradeModal = document.querySelector(".nutrigrade");
+const novaBadgeEl = document.getElementById("novaBadge");
+const nutriBadgeEl = document.getElementById("nutriBadge");
 const additivesModal = document.querySelector(".additives-line");
-const ingredientsModal = document.querySelector(".ingredients.ingredients--scroll");
+const ingredientsModal = document.querySelector(
+  ".ingredients.ingredients--scroll"
+);
 const ingredientsSourceEl = document.getElementById("ingredientsSource");
-const nova = document.querySelector(".nova");
 const barcodeDisplay = document.getElementById("barcodeDisplay");
 const demoModeInput = document.getElementById("demoMode");
 const ingredientsLangPref = document.getElementById("ingredientsLangPref");
@@ -21,6 +23,9 @@ const manualBarcodeInput = document.getElementById("manualBarcodeInput");
 const DEMO_STORAGE_KEY = "foodscanner_demo_mode";
 const UI_LANG_KEY = "nutrisavvy_ui_lang";
 const INGREDIENTS_PREF_KEY = "nutrisavvy_ingredients_lang";
+const THEME_KEY = "nutrisavvy_theme";
+const HISTORY_KEY = "nutrisavvy_history";
+const HISTORY_MAX = 15;
 const BD_FALLBACK_MS = 25000;
 const BD_TICK_MS = 100;
 
@@ -62,6 +67,18 @@ const STRINGS = {
     legendNutriHeading: "Nutri-Score",
     legendNutriP:
       "Letter grades compare similar products in the same category. They are not a full verdict on health — consider portions and your overall diet.",
+    macrosHeading: "Nutrition per 100g",
+    macrosHeadingFull: "Nutritional values",
+    macroEnergy: "Energy",
+    macroFat: "Fat",
+    macroSatFat: "Sat. fat",
+    macroSugars: "Sugars",
+    macroProtein: "Protein",
+    macroSalt: "Salt",
+    historyHeading: "Recent scans",
+    historyEmpty: "No scan history yet",
+    emptyStateText: "Scan a product to get started",
+    pullToRescan: "Pull to rescan",
   },
   ro: {
     scan: "Scanează",
@@ -101,6 +118,18 @@ const STRINGS = {
     legendNutriHeading: "Nutri-Score",
     legendNutriP:
       "Literele compară produse similare din aceeași categorie. Nu înlocuiesc un sfat medical — ține cont de porții și de alimentația întreagă.",
+    macrosHeading: "Nutriție per 100g",
+    macrosHeadingFull: "Valori nutriționale",
+    macroEnergy: "Energie",
+    macroFat: "Grăsimi",
+    macroSatFat: "Grăsimi sat.",
+    macroSugars: "Zaharuri",
+    macroProtein: "Proteine",
+    macroSalt: "Sare",
+    historyHeading: "Scanări recente",
+    historyEmpty: "Nicio scanare anterioară",
+    emptyStateText: "Scanează un produs pentru a începe",
+    pullToRescan: "Trage pentru a rescana",
   },
 };
 
@@ -112,6 +141,10 @@ let additivesNumber;
 let productName;
 let ingredients;
 let productImage;
+let lastNutriments = null;
+let lastProductQuantity = null;      // numeric, e.g. 330
+let lastProductQuantityUnit = null;  // "g" or "ml"
+let lastProductQuantityLabel = null; // raw string e.g. "330 g (1 bottle)"
 let lastIngredientsMeta = { showSource: false, sourceLang: "" };
 
 let cameraStream = null;
@@ -119,6 +152,8 @@ let quaggaDecodeHandled = false;
 let barcodeDetectorInterval = null;
 let barcodeFallbackTimer = null;
 let bdDetecting = false;
+
+/* ── i18n helpers ── */
 
 function t(key) {
   const pack = STRINGS[uiLang] || STRINGS.en;
@@ -190,6 +225,8 @@ function resolveIngredientsWithMeta(product, pref) {
   return { text: null, sourceLang: null, showSource: false };
 }
 
+/* ── Barcode detection ── */
+
 async function barcodeDetectorSupported() {
   if (typeof BarcodeDetector === "undefined") return false;
   try {
@@ -216,6 +253,8 @@ function clearBarcodeDetectionTimers() {
   bdDetecting = false;
 }
 
+/* ── UI helpers ── */
+
 function setStatus(message, variant) {
   statusModal.textContent = message;
   statusModal.classList.remove(
@@ -230,25 +269,223 @@ function setStatus(message, variant) {
   else if (variant === "error") statusModal.classList.add("status--error");
 }
 
+function showSkeleton() {
+  var sk = document.getElementById("skeletonCard");
+  if (sk) sk.classList.remove("hidden");
+  resultModal.classList.add("hidden");
+}
+
+function hideSkeleton() {
+  var sk = document.getElementById("skeletonCard");
+  if (sk) sk.classList.add("hidden");
+}
+
+function hideEmptyState() {
+  var el = document.getElementById("emptyState");
+  if (el) el.classList.add("hidden");
+}
+
+/* ── Dark mode ── */
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  var icon = document.getElementById("darkToggleIcon");
+  if (icon) {
+    icon.textContent = theme === "dark" ? "light_mode" : "dark_mode";
+  }
+  var metaTheme = document.getElementById("meta-theme-color");
+  if (metaTheme) {
+    metaTheme.content = theme === "dark" ? "#1e1e1e" : "#2e7d32";
+  }
+}
+
+function initDarkMode() {
+  var saved = localStorage.getItem(THEME_KEY);
+  var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var isDark = saved === "dark" || (saved === null && prefersDark);
+  applyTheme(isDark ? "dark" : "light");
+}
+
+/* ── Macro nutritional table ── */
+
+function renderMacros(nutriments) {
+  var macrosTable = document.getElementById("macrosTable");
+  var macrosHeadingEl = document.querySelector(".macros-heading");
+  if (!macrosTable) return;
+  if (!nutriments) {
+    macrosTable.innerHTML = "";
+    return;
+  }
+
+  var hasTotal = lastProductQuantity != null && lastProductQuantity > 0;
+  var unit100 = "100\u00a0" + (lastProductQuantityUnit || "g");
+  var qtyDisplay =
+    lastProductQuantityLabel ||
+    lastProductQuantity + "\u00a0" + (lastProductQuantityUnit || "g");
+
+  if (macrosHeadingEl) {
+    macrosHeadingEl.textContent = hasTotal
+      ? t("macrosHeadingFull")
+      : t("macrosHeading");
+  }
+
+  var fields = [
+    { key: "energy-kcal_100g", labelKey: "macroEnergy", unit: "kcal" },
+    { key: "fat_100g", labelKey: "macroFat", unit: "g" },
+    { key: "saturated-fat_100g", labelKey: "macroSatFat", unit: "g" },
+    { key: "sugars_100g", labelKey: "macroSugars", unit: "g" },
+    { key: "proteins_100g", labelKey: "macroProtein", unit: "g" },
+    { key: "salt_100g", labelKey: "macroSalt", unit: "g" },
+  ];
+
+  var header = hasTotal
+    ? "<thead><tr>" +
+      '<th class="macros-th macros-th--label"></th>' +
+      '<th class="macros-th">per ' + unit100 + "</th>" +
+      '<th class="macros-th macros-th--total">per ' + qtyDisplay + "</th>" +
+      "</tr></thead>"
+    : "";
+
+  var rows = fields
+    .map(function (f) {
+      var val = nutriments[f.key];
+      var hasVal = val != null && val !== "";
+      var per100 = hasVal
+        ? parseFloat(val).toFixed(1) + "\u00a0" + f.unit
+        : "—";
+
+      var totalCell = "";
+      if (hasTotal) {
+        var totalVal = hasVal
+          ? ((parseFloat(val) * lastProductQuantity) / 100).toFixed(1) +
+            "\u00a0" + f.unit
+          : "—";
+        totalCell =
+          '<td class="macros-value macros-value--total">' + totalVal + "</td>";
+      }
+
+      return (
+        "<tr>" +
+        '<td class="macros-label">' + t(f.labelKey) + "</td>" +
+        '<td class="macros-value">' + per100 + "</td>" +
+        totalCell +
+        "</tr>"
+      );
+    })
+    .join("");
+
+  macrosTable.innerHTML = header + "<tbody>" + rows + "</tbody>";
+}
+
+/* ── Scan history ── */
+
+function saveToHistory(item) {
+  var history = [];
+  try {
+    history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch {
+    history = [];
+  }
+  history = history.filter(function (h) {
+    return h.barcode !== item.barcode;
+  });
+  history.unshift(item);
+  history = history.slice(0, HISTORY_MAX);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  var list = document.getElementById("historyList");
+  var empty = document.getElementById("historyEmpty");
+  if (!list) return;
+
+  var history = [];
+  try {
+    history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch {
+    history = [];
+  }
+
+  if (history.length === 0) {
+    list.innerHTML = "";
+    if (empty) empty.classList.remove("hidden");
+    return;
+  }
+
+  if (empty) empty.classList.add("hidden");
+
+  list.innerHTML = history
+    .map(function (item) {
+      var novaBadge =
+        item.nova >= 1 && item.nova <= 4
+          ? '<div class="nova-badge nova-' +
+            item.nova +
+            '" aria-label="NOVA ' +
+            item.nova +
+            '">' +
+            item.nova +
+            "</div>"
+          : "";
+      var g = item.nutriScore ? item.nutriScore.toLowerCase() : "";
+      var nutriBadge =
+        g && "abcde".indexOf(g) !== -1
+          ? '<div class="nutri-badge nutri-' +
+            g +
+            '" aria-label="Nutri-Score ' +
+            g.toUpperCase() +
+            '">' +
+            g.toUpperCase() +
+            "</div>"
+          : "";
+      var name = item.name
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .substring(0, 50);
+      return (
+        '<li class="history-item" data-barcode="' +
+        item.barcode +
+        '">' +
+        '<span class="history-item__name">' +
+        name +
+        "</span>" +
+        '<span class="history-item__badges">' +
+        novaBadge +
+        nutriBadge +
+        "</span>" +
+        "</li>"
+      );
+    })
+    .join("");
+
+  list.querySelectorAll(".history-item").forEach(function (li) {
+    li.addEventListener("click", function () {
+      handleScan(li.dataset.barcode);
+    });
+  });
+}
+
+/* ── i18n application ── */
+
 function applyI18n() {
   document.documentElement.lang = uiLang === "ro" ? "ro" : "en";
-  document.querySelectorAll("[data-i18n]").forEach((el) => {
-    const k = el.getAttribute("data-i18n");
+  document.querySelectorAll("[data-i18n]").forEach(function (el) {
+    var k = el.getAttribute("data-i18n");
     if (k) el.textContent = t(k);
   });
-  const autoOpt = ingredientsLangPref?.querySelector('option[value="auto"]');
+  var autoOpt = ingredientsLangPref?.querySelector('option[value="auto"]');
   if (autoOpt) autoOpt.textContent = t("prefAuto");
   document.getElementById("startBtn").textContent = t("scan");
   if (manualOpenBtn) manualOpenBtn.textContent = t("enterManually");
   if (manualCancel) manualCancel.textContent = t("cancel");
-  const manualSubmit = document.getElementById("manualSubmit");
+  var manualSubmit = document.getElementById("manualSubmit");
   if (manualSubmit) manualSubmit.textContent = t("lookUp");
-  const manualLabel = manualDialog?.querySelector("[data-i18n]");
+  var manualLabel = manualDialog?.querySelector("[data-i18n]");
   if (manualLabel) {
-    const k = manualLabel.getAttribute("data-i18n");
-    if (k) manualLabel.textContent = t(k);
+    var k2 = manualLabel.getAttribute("data-i18n");
+    if (k2) manualLabel.textContent = t(k2);
   }
-  document.querySelectorAll(".lang-toggle__btn").forEach((btn) => {
+  document.querySelectorAll(".lang-toggle__btn").forEach(function (btn) {
     btn.setAttribute(
       "aria-pressed",
       btn.getAttribute("data-lang") === uiLang ? "true" : "false"
@@ -260,6 +497,8 @@ function applyI18n() {
   ) {
     barcodeDisplay.textContent = t("noBarcodeYet");
   }
+  renderHistory();
+  if (lastNutriments) renderMacros(lastNutriments);
 }
 
 function setUiLang(lang) {
@@ -268,17 +507,20 @@ function setUiLang(lang) {
   applyI18n();
 }
 
+/* ── Product data resolution ── */
+
 function resolveProductName(product) {
   if (!product) return null;
-  const main = product.product_name;
+  var main = product.product_name;
   if (typeof main === "string" && main.trim().length > 0) return main.trim();
-  const keys = Object.keys(product);
-  const key = keys.find(
-    (k) =>
+  var keys = Object.keys(product);
+  var key = keys.find(function (k) {
+    return (
       k.startsWith("product_name_") &&
       typeof product[k] === "string" &&
       product[k].trim().length > 0
-  );
+    );
+  });
   return key ? product[key].trim() : null;
 }
 
@@ -288,98 +530,106 @@ function resolveProductImage(product) {
     return product.image_front_url;
   if (typeof product.image_url === "string" && product.image_url)
     return product.image_url;
-  const small = product.selected_images?.front?.small;
+  var small = product.selected_images?.front?.small;
   if (small && typeof small === "object") {
-    const lang = product.lang || "en";
+    var lang = product.lang || "en";
     return (
       small[lang] ||
       small.en ||
       small.fr ||
-      Object.values(small).find((u) => typeof u === "string" && u.length > 0) ||
+      Object.values(small).find(function (u) {
+        return typeof u === "string" && u.length > 0;
+      }) ||
       null
     );
   }
   return null;
 }
 
-function nutriGradeAssetUrl(gradeLetter) {
-  if (gradeLetter == null || gradeLetter === "") return null;
-  const g = String(gradeLetter).trim().toLowerCase();
-  if (!"abcde".includes(g)) return null;
-  const name = g === "c" ? "nutri-c" : `nutri-${g.toUpperCase()}`;
-  return `assets/${name}.jpg`;
-}
+/* ── Result card rendering ── */
 
 function hideResultDetails() {
   novaRow.classList.add("hidden");
-  nutrigradeModal.classList.add("hidden");
+  nutriBadgeEl.classList.add("hidden");
   additivesModal.classList.add("hidden");
   ingredientsModal.classList.add("hidden");
   ingredientsSourceEl.classList.add("hidden");
-  document.querySelectorAll(".result-block").forEach((el) => {
+  document.querySelectorAll(".result-block").forEach(function (el) {
     el.classList.remove("is-revealed");
   });
 }
 
 function revealBlock(element, delayMs) {
-  const block = element?.closest?.(".result-block");
+  var block = element?.closest?.(".result-block");
   if (!block) return;
-  setTimeout(() => block.classList.add("is-revealed"), delayMs);
+  setTimeout(function () {
+    block.classList.add("is-revealed");
+  }, delayMs);
 }
 
 function updateScannerOrientation() {
-  const land = window.matchMedia("(orientation: landscape)").matches;
+  var land = window.matchMedia("(orientation: landscape)").matches;
   scanner.classList.toggle("scanner--landscape", land);
 }
 
-const displayMessage = function () {
+var displayMessage = function () {
   document.querySelector(".product--name").textContent = productName;
   resultModal.classList.remove("hidden");
   hideResultDetails();
 
   document
     .querySelectorAll(".score-section.result-block")
-    .forEach((el) => el.classList.add("is-revealed"));
+    .forEach(function (el) {
+      el.classList.add("is-revealed");
+    });
 
-  const imageUrl = productImage;
+  // Product image
+  var imageUrl = productImage;
   if (imageUrl) {
-    const img = document.querySelector(".product--image");
+    var img = document.querySelector(".product--image");
     img.src = imageUrl;
     img.alt = productName || "Product";
     img.classList.remove("hidden");
   } else {
-    const img = document.querySelector(".product--image");
-    img.removeAttribute("src");
-    img.alt = "";
-    img.classList.add("hidden");
+    var img2 = document.querySelector(".product--image");
+    img2.removeAttribute("src");
+    img2.alt = "";
+    img2.classList.add("hidden");
   }
 
+  // NOVA badge (CSS)
   if (novaGroup >= 1 && novaGroup <= 4) {
     novaRow.classList.remove("hidden");
-    nova.src = `assets/${novaGroup}.svg`;
-    nova.alt = `NOVA ${novaGroup}`;
-    revealBlock(nova, 0);
+    novaBadgeEl.className = "nova-badge nova-" + novaGroup;
+    novaBadgeEl.textContent = String(novaGroup);
+    novaBadgeEl.setAttribute("aria-label", "NOVA " + novaGroup);
+    revealBlock(novaBadgeEl, 0);
   } else {
     novaRow.classList.add("hidden");
-    nova.removeAttribute("src");
-    nova.alt = "";
+    novaBadgeEl.className = "nova-badge";
+    novaBadgeEl.textContent = "";
   }
 
-  setTimeout(() => {
-    const nutriSrc = nutriGradeAssetUrl(grade);
-    if (nutriSrc) {
-      nutrigradeModal.src = nutriSrc;
-      nutrigradeModal.alt = `Nutri-Score ${String(grade).toUpperCase()}`;
-      nutrigradeModal.classList.remove("hidden");
-      revealBlock(nutrigradeModal, 0);
+  // Nutri-Score badge (CSS)
+  setTimeout(function () {
+    var g = grade ? String(grade).trim().toLowerCase() : null;
+    if (g && "abcde".indexOf(g) !== -1) {
+      nutriBadgeEl.className = "nutri-badge nutri-" + g;
+      nutriBadgeEl.textContent = g.toUpperCase();
+      nutriBadgeEl.setAttribute(
+        "aria-label",
+        "Nutri-Score " + g.toUpperCase()
+      );
+      revealBlock(nutriBadgeEl, 0);
     } else {
-      nutrigradeModal.removeAttribute("src");
-      nutrigradeModal.classList.add("hidden");
+      nutriBadgeEl.className = "nutri-badge hidden";
+      nutriBadgeEl.textContent = "";
     }
   }, 400);
 
-  setTimeout(() => {
-    const additivesLabel =
+  // Additives
+  setTimeout(function () {
+    var additivesLabel =
       additivesNumber != null && additivesNumber !== ""
         ? tReplace("additivesCount", { n: additivesNumber })
         : t("additivesNotListed");
@@ -388,9 +638,17 @@ const displayMessage = function () {
     revealBlock(additivesModal, 0);
   }, 400);
 
-  setTimeout(() => {
-    ingredientsModal.textContent =
-      ingredients || t("noIngredients");
+  // Macros table
+  setTimeout(function () {
+    if (lastNutriments) {
+      renderMacros(lastNutriments);
+      revealBlock(document.getElementById("macrosTable"), 0);
+    }
+  }, 400);
+
+  // Ingredients
+  setTimeout(function () {
+    ingredientsModal.textContent = ingredients || t("noIngredients");
     if (lastIngredientsMeta?.showSource && lastIngredientsMeta.sourceLang) {
       ingredientsSourceEl.textContent = tReplace("ingredientsSource", {
         lang: lastIngredientsMeta.sourceLang,
@@ -404,8 +662,11 @@ const displayMessage = function () {
   }, 400);
 };
 
+/* ── Scan handler ── */
+
 function handleScan(decodedData) {
-  const digits = String(decodedData).replace(/\D/g, "");
+  hideEmptyState();
+  var digits = String(decodedData).replace(/\D/g, "");
   if (!digits) return;
   barcode = digits;
   if (barcodeDisplay) {
@@ -414,13 +675,16 @@ function handleScan(decodedData) {
   }
 
   setStatus(t("loadingProduct"), "scanning");
+  showSkeleton();
 
-  const apiUrl = `https://world.openfoodfacts.net/api/v2/product/${encodeURIComponent(barcode)}`;
+  var apiUrl =
+    "https://world.openfoodfacts.net/api/v2/product/" +
+    encodeURIComponent(barcode);
 
   fetch(apiUrl)
-    .then(async (response) => {
-      const text = await response.text();
-      let json;
+    .then(async function (response) {
+      var text = await response.text();
+      var json;
       try {
         json = JSON.parse(text);
       } catch {
@@ -428,31 +692,31 @@ function handleScan(decodedData) {
       }
       return json;
     })
-    .then((json) => {
+    .then(function (json) {
       if (json.status != 1 || !json.product) {
+        hideSkeleton();
         resultModal.classList.add("hidden");
         setStatus(t("productNotFound"), "error");
         return;
       }
 
-      const product = json.product;
+      var product = json.product;
       productName = resolveProductName(product);
       if (!productName) {
+        hideSkeleton();
         resultModal.classList.add("hidden");
         setStatus(t("noProductName"), "error");
         return;
       }
 
-      const rawNova = product.nova_group;
+      var rawNova = product.nova_group;
       novaGroup =
-        typeof rawNova === "number"
-          ? rawNova
-          : parseInt(String(rawNova), 10);
+        typeof rawNova === "number" ? rawNova : parseInt(String(rawNova), 10);
       if (Number.isNaN(novaGroup)) novaGroup = null;
 
       grade = product.nutriscore_grade || null;
 
-      const addN = product.additives_n;
+      var addN = product.additives_n;
       additivesNumber =
         typeof addN === "number"
           ? addN
@@ -460,10 +724,7 @@ function handleScan(decodedData) {
             ? addN
             : null;
 
-      const ingMeta = resolveIngredientsWithMeta(
-        product,
-        getIngredientsPref()
-      );
+      var ingMeta = resolveIngredientsWithMeta(product, getIngredientsPref());
       ingredients = ingMeta.text;
       lastIngredientsMeta = {
         showSource: ingMeta.showSource,
@@ -471,16 +732,39 @@ function handleScan(decodedData) {
       };
 
       productImage = resolveProductImage(product);
+      lastNutriments = product.nutriments || null;
 
+      var rawQty = product.product_quantity;
+      var parsedQty = rawQty != null ? parseFloat(rawQty) : NaN;
+      lastProductQuantity = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : null;
+      lastProductQuantityUnit = product.product_quantity_unit || null;
+      lastProductQuantityLabel = product.quantity || null;
+
+      hideSkeleton();
       setStatus(t("loadedProduct"), "success");
       displayMessage();
+
+      // Haptic feedback
+      if (navigator.vibrate) navigator.vibrate(100);
+
+      // Save to history
+      saveToHistory({
+        barcode: barcode,
+        name: productName,
+        nutriScore: grade || null,
+        nova: novaGroup || null,
+        ts: Date.now(),
+      });
     })
-    .catch((error) => {
+    .catch(function (error) {
       console.error("Error fetching data:", error);
+      hideSkeleton();
       resultModal.classList.add("hidden");
       setStatus(t("fetchError"), "error");
     });
 }
+
+/* ── Camera & scanner ── */
 
 function stopCameraAndQuagga() {
   clearBarcodeDetectionTimers();
@@ -490,12 +774,16 @@ function stopCameraAndQuagga() {
     /* noop */
   }
   if (cameraStream) {
-    cameraStream.getTracks().forEach((tr) => tr.stop());
+    cameraStream.getTracks().forEach(function (tr) {
+      tr.stop();
+    });
     cameraStream = null;
   }
   if (video.srcObject) {
-    const tracks = video.srcObject.getTracks?.() || [];
-    tracks.forEach((tr) => tr.stop());
+    var tracks = video.srcObject.getTracks?.() || [];
+    tracks.forEach(function (tr) {
+      tr.stop();
+    });
     video.srcObject = null;
   }
   video.pause();
@@ -513,20 +801,15 @@ function onBarcodeDecoded(code) {
   scanner.classList.add("flashing-border");
   scanner.style.display = "none";
   handleScan(code);
-  setTimeout(() => scanner.classList.remove("flashing-border"), 1500);
+  setTimeout(function () {
+    scanner.classList.remove("flashing-border");
+  }, 1500);
 }
 
 function startQuaggaFromStream() {
-  const config = {
-    inputStream: {
-      name: "Live",
-      type: "LiveStream",
-      target: video,
-    },
-    locator: {
-      patchSize: "medium",
-      halfSample: true,
-    },
+  var config = {
+    inputStream: { name: "Live", type: "LiveStream", target: video },
+    locator: { patchSize: "medium", halfSample: true },
     numOfWorkers: 2,
     frequency: 12,
     decoder: {
@@ -557,8 +840,7 @@ function startQuaggaFromStream() {
       } catch {
         /* ignore */
       }
-      const code = result.codeResult.code;
-      onBarcodeDecoded(code);
+      onBarcodeDecoded(result.codeResult.code);
     }
 
     Quagga.onDetected(onDetected);
@@ -567,7 +849,7 @@ function startQuaggaFromStream() {
 }
 
 function startNativeBarcodeLoop() {
-  let detector;
+  var detector;
   try {
     detector = new BarcodeDetector({ formats: ["ean_13", "ean_8"] });
   } catch (e) {
@@ -576,18 +858,14 @@ function startNativeBarcodeLoop() {
     return;
   }
 
-  barcodeDetectorInterval = window.setInterval(async () => {
+  barcodeDetectorInterval = window.setInterval(async function () {
     if (quaggaDecodeHandled || !video.srcObject || video.readyState < 2) return;
     if (bdDetecting) return;
     bdDetecting = true;
     try {
-      const codes = await detector.detect(video);
+      var codes = await detector.detect(video);
       if (codes.length > 0 && !quaggaDecodeHandled) {
-        const raw =
-          codes[0].rawValue ||
-          codes[0].rawvalue ||
-          codes[0].value ||
-          "";
+        var raw = codes[0].rawValue || codes[0].rawvalue || codes[0].value || "";
         if (raw) onBarcodeDecoded(String(raw));
       }
     } catch {
@@ -596,7 +874,7 @@ function startNativeBarcodeLoop() {
     bdDetecting = false;
   }, BD_TICK_MS);
 
-  barcodeFallbackTimer = window.setTimeout(() => {
+  barcodeFallbackTimer = window.setTimeout(function () {
     if (quaggaDecodeHandled) return;
     clearBarcodeDetectionTimers();
     try {
@@ -622,6 +900,10 @@ function startScanner() {
   additivesNumber = null;
   ingredients = null;
   productImage = null;
+  lastNutriments = null;
+  lastProductQuantity = null;
+  lastProductQuantityUnit = null;
+  lastProductQuantityLabel = null;
 
   if (barcodeDisplay) {
     barcodeDisplay.textContent = t("noBarcodeYet");
@@ -629,6 +911,7 @@ function startScanner() {
   }
 
   resultModal.classList.add("hidden");
+  hideSkeleton();
   document.querySelector(".product--image")?.classList.add("hidden");
   hideResultDetails();
 
@@ -636,7 +919,7 @@ function startScanner() {
   scanner.classList.remove("flashing-border");
   updateScannerOrientation();
 
-  const constraints = {
+  var constraints = {
     video: {
       facingMode: "environment",
       width: { ideal: 1920 },
@@ -644,24 +927,21 @@ function startScanner() {
     },
   };
 
-  setStatus(`${t("scanning")} ${t("scanHint")}`, "scanning");
+  setStatus(t("scanning") + " " + t("scanHint"), "scanning");
 
   navigator.mediaDevices
     .getUserMedia(constraints)
-    .then((stream) => {
+    .then(function (stream) {
       cameraStream = stream;
       video.srcObject = stream;
       return video.play();
     })
-    .then(async () => {
-      const useBD = await barcodeDetectorSupported();
-      if (useBD) {
-        startNativeBarcodeLoop();
-      } else {
-        startQuaggaFromStream();
-      }
+    .then(async function () {
+      var useBD = await barcodeDetectorSupported();
+      if (useBD) startNativeBarcodeLoop();
+      else startQuaggaFromStream();
     })
-    .catch((error) => {
+    .catch(function (error) {
       console.error("Error accessing camera:", error);
       stopScannerHardware();
       scanner.style.display = "none";
@@ -669,61 +949,132 @@ function startScanner() {
     });
 }
 
+/* ── Storage init ── */
+
 function initDemoModeFromStorage() {
   if (!demoModeInput) return;
-  const stored = localStorage.getItem(DEMO_STORAGE_KEY);
+  var stored = localStorage.getItem(DEMO_STORAGE_KEY);
   if (stored !== null) demoModeInput.checked = stored === "1";
-  demoModeInput.addEventListener("change", () => {
+  demoModeInput.addEventListener("change", function () {
     localStorage.setItem(DEMO_STORAGE_KEY, demoModeInput.checked ? "1" : "0");
   });
 }
 
 function initIngredientsPrefFromStorage() {
   if (!ingredientsLangPref) return;
-  const stored = localStorage.getItem(INGREDIENTS_PREF_KEY);
+  var stored = localStorage.getItem(INGREDIENTS_PREF_KEY);
   if (stored === "ro" || stored === "en" || stored === "auto") {
     ingredientsLangPref.value = stored;
   }
-  ingredientsLangPref.addEventListener("change", () => {
+  ingredientsLangPref.addEventListener("change", function () {
     localStorage.setItem(INGREDIENTS_PREF_KEY, ingredientsLangPref.value);
   });
 }
 
 function initUiLangFromStorage() {
-  const stored = localStorage.getItem(UI_LANG_KEY);
+  var stored = localStorage.getItem(UI_LANG_KEY);
   if (stored === "ro" || stored === "en") uiLang = stored;
 }
 
-document.getElementById("startBtn").addEventListener("click", () => {
+/* ── Pull-to-rescan gesture ── */
+
+var pullStartY = 0;
+var pullEligible = false;
+
+document.addEventListener(
+  "touchstart",
+  function (e) {
+    pullEligible = window.scrollY === 0;
+    pullStartY = e.touches[0].clientY;
+  },
+  { passive: true }
+);
+
+document.addEventListener(
+  "touchmove",
+  function (e) {
+    if (!pullEligible) return;
+    var delta = e.touches[0].clientY - pullStartY;
+    var indicator = document.getElementById("pullIndicator");
+    if (delta > 60) {
+      indicator?.classList.add("pull-indicator--visible");
+    } else {
+      indicator?.classList.remove("pull-indicator--visible");
+    }
+  },
+  { passive: true }
+);
+
+document.addEventListener(
+  "touchend",
+  function (e) {
+    if (!pullEligible) return;
+    var indicator = document.getElementById("pullIndicator");
+    indicator?.classList.remove("pull-indicator--visible");
+    var delta = e.changedTouches[0].clientY - pullStartY;
+    if (window.scrollY === 0 && delta > 80 && !quaggaDecodeHandled) {
+      if (demoModeInput?.checked) fakeScanner();
+      else startScanner();
+    }
+  },
+  { passive: true }
+);
+
+/* ── Event listeners ── */
+
+document.getElementById("startBtn").addEventListener("click", function () {
   if (demoModeInput?.checked) fakeScanner();
   else startScanner();
 });
 
-document.querySelectorAll(".lang-toggle__btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
+document.querySelectorAll(".lang-toggle__btn").forEach(function (btn) {
+  btn.addEventListener("click", function () {
     setUiLang(btn.getAttribute("data-lang"));
   });
 });
 
-window.addEventListener("orientationchange", () => {
+document.getElementById("darkToggle")?.addEventListener("click", function () {
+  var current =
+    document.documentElement.getAttribute("data-theme") || "light";
+  var next = current === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+});
+
+window.addEventListener("orientationchange", function () {
   requestAnimationFrame(updateScannerOrientation);
 });
 
-manualOpenBtn?.addEventListener("click", () => {
+manualOpenBtn?.addEventListener("click", function () {
   manualBarcodeInput.value = "";
   manualDialog.showModal();
 });
 
-manualCancel?.addEventListener("click", () => manualDialog.close());
+manualCancel?.addEventListener("click", function () {
+  manualDialog.close();
+});
 
-manualForm?.addEventListener("submit", (e) => {
+manualForm?.addEventListener("submit", function (e) {
   e.preventDefault();
-  const raw = manualBarcodeInput.value.trim().replace(/\D/g, "");
+  var raw = manualBarcodeInput.value.trim().replace(/\D/g, "");
   manualDialog.close();
   if (raw.length >= 8) handleScan(raw);
 });
 
+/* ── Init ── */
+
+initDarkMode();
 initUiLangFromStorage();
 initDemoModeFromStorage();
 initIngredientsPrefFromStorage();
 applyI18n();
+renderHistory();
+
+// Register Service Worker for PWA
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./service-worker.js").catch(function () {
+      // SW registration not critical
+    });
+  });
+}

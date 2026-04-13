@@ -613,6 +613,25 @@ canvas {
   padding: 0.4rem 0.25rem;
 }
 
+.macros-th {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-align: right;
+  padding: 0 0.25rem 0.45rem;
+  white-space: nowrap;
+}
+
+.macros-th--label {
+  text-align: left;
+}
+
+.macros-th--total {
+  color: var(--accent);
+}
+
 .macros-label {
   color: var(--text-muted);
   font-size: 0.85rem;
@@ -623,6 +642,11 @@ canvas {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+}
+
+.macros-value--total {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .ingredients-heading {

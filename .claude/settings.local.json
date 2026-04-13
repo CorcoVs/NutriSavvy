@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s https://world.openfoodfacts.net/api/v2/product/__TRACKED_VAR__)"
+    ]
+  }
+}
